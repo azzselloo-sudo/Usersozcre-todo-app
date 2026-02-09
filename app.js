@@ -124,6 +124,14 @@ function signOutUser() {
 googleLoginBtn.addEventListener('click', signInWithGoogle);
 logoutBtn.addEventListener('click', signOutUser);
 
+// Handle redirect result (mobile Google login)
+auth.getRedirectResult().catch(err => {
+    console.error('Redirect login error:', err);
+    if (err.code !== 'auth/popup-closed-by-user') {
+        authError.textContent = '로그인 실패: ' + err.message;
+    }
+});
+
 // === Auth State Observer ===
 auth.onAuthStateChanged(async user => {
     if (user) {
