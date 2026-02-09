@@ -91,27 +91,19 @@ function escapeHtml(str) {
 }
 
 // === Auth Functions ===
-function isMobile() {
-    return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-}
-
 function signInWithGoogle() {
     authError.textContent = '';
     const provider = new firebase.auth.GoogleAuthProvider();
-    if (isMobile()) {
-        auth.signInWithRedirect(provider);
-    } else {
-        auth.signInWithPopup(provider).catch(err => {
-            console.error('Login error:', err);
-            if (err.code === 'auth/popup-closed-by-user') {
-                authError.textContent = '로그인이 취소되었습니다';
-            } else if (err.code === 'auth/popup-blocked') {
-                auth.signInWithRedirect(provider);
-            } else {
-                authError.textContent = '로그인 실패: ' + err.message;
-            }
-        });
-    }
+    auth.signInWithPopup(provider).catch(err => {
+        console.error('Login error:', err);
+        if (err.code === 'auth/popup-closed-by-user') {
+            authError.textContent = '로그인이 취소되었습니다';
+        } else if (err.code === 'auth/popup-blocked') {
+            authError.textContent = '팝업이 차단되었습니다. 팝업을 허용해주세요.';
+        } else {
+            authError.textContent = '로그인 실패: ' + err.message;
+        }
+    });
 }
 
 function signOutUser() {
@@ -123,14 +115,6 @@ function signOutUser() {
 // === Auth Events ===
 googleLoginBtn.addEventListener('click', signInWithGoogle);
 logoutBtn.addEventListener('click', signOutUser);
-
-// Handle redirect result (mobile Google login)
-auth.getRedirectResult().catch(err => {
-    console.error('Redirect login error:', err);
-    if (err.code !== 'auth/popup-closed-by-user') {
-        authError.textContent = '로그인 실패: ' + err.message;
-    }
-});
 
 // === Auth State Observer ===
 auth.onAuthStateChanged(async user => {
