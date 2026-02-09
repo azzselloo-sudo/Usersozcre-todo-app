@@ -57,6 +57,14 @@ function userCategoriesRef() {
     return db.collection('users').doc(currentUser.uid).collection('meta').doc('categories');
 }
 
+// === Toast ===
+const toast = document.getElementById('toast');
+function showToast(msg) {
+    toast.textContent = msg;
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 5000);
+}
+
 // === Helpers ===
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -345,6 +353,7 @@ function addTodo() {
     // Firestore write
     userTodosRef().doc(todo.id).set(todo).catch(err => {
         console.error('Failed to add todo:', err);
+        showToast('저장 실패: ' + err.code + ' - ' + err.message);
         // Rollback
         todos = todos.filter(t => t.id !== todo.id);
         render();
