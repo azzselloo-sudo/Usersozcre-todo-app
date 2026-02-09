@@ -1,7 +1,23 @@
+// === Firebase References ===
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// Enable offline persistence
+db.enablePersistence().catch(err => {
+    if (err.code === 'failed-precondition') {
+        console.warn('Firestore persistence: multiple tabs open');
+    } else if (err.code === 'unimplemented') {
+        console.warn('Firestore persistence: not supported');
+    }
+});
+
 // === State ===
-let todos = JSON.parse(localStorage.getItem('todos') || '[]');
-let categories = JSON.parse(localStorage.getItem('categories') || '[]');
+let todos = [];
+let categories = [];
 let selectedCategory = '';
+let currentUser = null;
+let unsubTodos = null;
+let unsubCategories = null;
 
 // Calendar state
 const now = new Date();
@@ -10,6 +26,13 @@ let calMonth = now.getMonth();
 let calSelectedDate = null;
 
 // === DOM ===
+const authScreen = document.getElementById('auth-screen');
+const appContainer = document.getElementById('app-container');
+const googleLoginBtn = document.getElementById('google-login-btn');
+const authError = document.getElementById('auth-error');
+const userAvatar = document.getElementById('user-avatar');
+const userName = document.getElementById('user-name');
+const logoutBtn = document.getElementById('logout-btn');
 const todoInput = document.getElementById('todo-input');
 const addBtn = document.getElementById('add-btn');
 const categoryInput = document.getElementById('category-input');
@@ -25,12 +48,16 @@ const calDetail = document.getElementById('cal-detail');
 const calDetailTitle = document.getElementById('cal-detail-title');
 const calDetailList = document.getElementById('cal-detail-list');
 
-// === Helpers ===
-function save() {
-    localStorage.setItem('todos', JSON.stringify(todos));
-    localStorage.setItem('categories', JSON.stringify(categories));
+// === Firestore Helpers ===
+function userTodosRef() {
+    return db.collection('users').doc(currentUser.uid).collection('todos');
 }
 
+function userCategoriesRef() {
+    return db.collection('users').doc(currentUser.uid).collection('meta').doc('categories');
+}
+
+// === Helpers ===
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
@@ -63,11 +90,174 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// === Auth Functions ===
+function signInWithGoogle() {
+    authError.textContent = '';
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(err => {
+        console.error('Login error:', err);
+        if (err.code === 'auth/popup-closed-by-user') {
+            authError.textContent = '로그인이 취소되었습니다';
+        } else {
+            authError.textContent = '로그인 실패: ' + err.message;
+        }
+    });
+}
+
+function signOutUser() {
+    auth.signOut().catch(err => {
+        console.error('Logout error:', err);
+    });
+}
+
+// === Auth Events ===
+googleLoginBtn.addEventListener('click', signInWithGoogle);
+logoutBtn.addEventListener('click', signOutUser);
+
+// === Auth State Observer ===
+auth.onAuthStateChanged(async user => {
+    if (user) {
+        currentUser = user;
+
+        // Update user bar
+        userAvatar.src = user.photoURL || '';
+        userName.textContent = user.displayName || user.email;
+
+        // Show app, hide auth
+        authScreen.style.display = 'none';
+        appContainer.style.display = '';
+
+        // Migrate localStorage data if needed
+        await migrateLocalStorage(user.uid);
+
+        // Load initial data
+        await loadFromFirestore(user.uid);
+
+        // Render
+        renderCategoryChips();
+        renderFilterOptions();
+        render();
+
+        // Start real-time listeners
+        startRealtimeListeners(user.uid);
+    } else {
+        currentUser = null;
+
+        // Stop listeners
+        stopRealtimeListeners();
+
+        // Clear state
+        todos = [];
+        categories = [];
+        selectedCategory = '';
+
+        // Show auth, hide app
+        authScreen.style.display = '';
+        appContainer.style.display = 'none';
+    }
+});
+
+// === localStorage → Firestore Migration ===
+async function migrateLocalStorage(uid) {
+    const localTodos = localStorage.getItem('todos');
+    const localCategories = localStorage.getItem('categories');
+
+    if (!localTodos && !localCategories) return;
+
+    const parsedTodos = localTodos ? JSON.parse(localTodos) : [];
+    const parsedCategories = localCategories ? JSON.parse(localCategories) : [];
+
+    if (parsedTodos.length === 0 && parsedCategories.length === 0) return;
+
+    // Check if Firestore already has data (skip if so)
+    const snapshot = await userTodosRef().limit(1).get();
+    if (!snapshot.empty) {
+        // Firestore already has data, just clean up localStorage
+        localStorage.removeItem('todos');
+        localStorage.removeItem('categories');
+        return;
+    }
+
+    // Batch write todos
+    const batch = db.batch();
+
+    parsedTodos.forEach(todo => {
+        const ref = userTodosRef().doc(todo.id);
+        batch.set(ref, {
+            id: todo.id,
+            text: todo.text,
+            category: todo.category || '',
+            deadline: todo.deadline || null,
+            completed: !!todo.completed,
+            completedAt: todo.completedAt || null,
+            createdAt: todo.createdAt || new Date().toISOString()
+        });
+    });
+
+    if (parsedCategories.length > 0) {
+        batch.set(userCategoriesRef(), { list: parsedCategories });
+    }
+
+    await batch.commit();
+
+    // Clean up localStorage
+    localStorage.removeItem('todos');
+    localStorage.removeItem('categories');
+}
+
+// === Firestore Load ===
+async function loadFromFirestore(uid) {
+    // Load todos
+    const todosSnap = await userTodosRef().get();
+    todos = todosSnap.docs.map(doc => doc.data());
+
+    // Load categories
+    const catSnap = await userCategoriesRef().get();
+    if (catSnap.exists) {
+        categories = catSnap.data().list || [];
+    } else {
+        categories = [];
+    }
+}
+
+// === Real-time Listeners ===
+function startRealtimeListeners(uid) {
+    stopRealtimeListeners();
+
+    unsubTodos = userTodosRef().onSnapshot(snapshot => {
+        todos = snapshot.docs.map(doc => doc.data());
+        render();
+    });
+
+    unsubCategories = userCategoriesRef().onSnapshot(doc => {
+        if (doc.exists) {
+            categories = doc.data().list || [];
+        } else {
+            categories = [];
+        }
+        renderCategoryChips();
+        renderFilterOptions();
+    });
+}
+
+function stopRealtimeListeners() {
+    if (unsubTodos) { unsubTodos(); unsubTodos = null; }
+    if (unsubCategories) { unsubCategories(); unsubCategories = null; }
+}
+
+// === Firestore Save Helpers ===
+function saveCategories() {
+    if (!currentUser) return;
+    userCategoriesRef().set({ list: categories }).catch(err => {
+        console.error('Failed to save categories:', err);
+    });
+}
+
 // === Category Management ===
 function ensureCategory(name) {
     if (!name || categories.includes(name)) return;
     categories.push(name);
-    save();
+    saveCategories();
     renderCategoryChips();
     renderFilterOptions();
 }
@@ -78,7 +268,7 @@ function deleteCategory(name) {
         selectedCategory = '';
         categoryInput.value = '';
     }
-    save();
+    saveCategories();
     renderCategoryChips();
     renderFilterOptions();
 }
@@ -125,10 +315,10 @@ function renderFilterOptions() {
     filterCategory.value = val;
 }
 
-// === Todo CRUD ===
+// === Todo CRUD (Firestore) ===
 function addTodo() {
     const text = todoInput.value.trim();
-    if (!text) return;
+    if (!text || !currentUser) return;
 
     const catName = categoryInput.value.trim() || selectedCategory;
     if (catName) ensureCategory(catName);
@@ -143,35 +333,83 @@ function addTodo() {
         createdAt: new Date().toISOString()
     };
 
+    // Optimistic update
     todos.push(todo);
-    save();
     render();
 
     todoInput.value = '';
     todoInput.focus();
+
+    // Firestore write
+    userTodosRef().doc(todo.id).set(todo).catch(err => {
+        console.error('Failed to add todo:', err);
+        // Rollback
+        todos = todos.filter(t => t.id !== todo.id);
+        render();
+    });
 }
 
 function toggleTodo(id) {
     const todo = todos.find(t => t.id === id);
-    if (!todo) return;
+    if (!todo || !currentUser) return;
+
+    // Optimistic update
+    const prevCompleted = todo.completed;
+    const prevCompletedAt = todo.completedAt;
     todo.completed = !todo.completed;
     todo.completedAt = todo.completed ? new Date().toISOString() : null;
-    save();
     render();
+
+    // Firestore write
+    userTodosRef().doc(id).update({
+        completed: todo.completed,
+        completedAt: todo.completedAt
+    }).catch(err => {
+        console.error('Failed to toggle todo:', err);
+        // Rollback
+        todo.completed = prevCompleted;
+        todo.completedAt = prevCompletedAt;
+        render();
+    });
 }
 
 function deleteTodo(id) {
+    if (!currentUser) return;
+
+    // Optimistic update
+    const removed = todos.find(t => t.id === id);
     todos = todos.filter(t => t.id !== id);
-    save();
     render();
+
+    // Firestore write
+    userTodosRef().doc(id).delete().catch(err => {
+        console.error('Failed to delete todo:', err);
+        // Rollback
+        if (removed) {
+            todos.push(removed);
+            render();
+        }
+    });
 }
 
 function updateDeadline(id, newDeadline) {
     const todo = todos.find(t => t.id === id);
-    if (!todo) return;
+    if (!todo || !currentUser) return;
+
+    // Optimistic update
+    const prevDeadline = todo.deadline;
     todo.deadline = newDeadline || null;
-    save();
     render();
+
+    // Firestore write
+    userTodosRef().doc(id).update({
+        deadline: todo.deadline
+    }).catch(err => {
+        console.error('Failed to update deadline:', err);
+        // Rollback
+        todo.deadline = prevDeadline;
+        render();
+    });
 }
 
 // === Render ===
@@ -374,8 +612,8 @@ function renderCalendar() {
 
     // Next month padding
     const totalCells = startDow + daysInMonth;
-    const remaining = (7 - (totalCells % 7)) % 7;
-    for (let i = 1; i <= remaining; i++) {
+    const remainingCells = (7 - (totalCells % 7)) % 7;
+    for (let i = 1; i <= remainingCells; i++) {
         const day = document.createElement('div');
         day.className = 'cal-day other-month';
         const num = document.createElement('span');
@@ -529,8 +767,3 @@ nextMonthBtn.addEventListener('click', () => {
     calSelectedDate = null;
     renderCalendar();
 });
-
-// === Init ===
-renderCategoryChips();
-renderFilterOptions();
-renderList();

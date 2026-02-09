@@ -16,6 +16,111 @@ body {
     margin: 0 auto;
 }
 
+/* ===== Auth Screen ===== */
+.auth-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.auth-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 40px 32px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+    text-align: center;
+    max-width: 360px;
+    width: 100%;
+}
+
+.auth-card h1 {
+    margin-bottom: 12px;
+}
+
+.auth-desc {
+    color: #aaa;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 28px;
+}
+
+.google-login-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 24px;
+    background: #fff;
+    border: 2px solid #efe9e3;
+    border-radius: 12px;
+    font-size: 15px;
+    font-family: 'Jua', sans-serif;
+    color: #555;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.google-login-btn:hover {
+    border-color: #a8d8a8;
+    background: #f9fff9;
+}
+
+.auth-error {
+    color: #e07070;
+    font-size: 13px;
+    margin-top: 12px;
+    min-height: 20px;
+}
+
+/* ===== User Bar ===== */
+.user-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #f0ece6;
+}
+
+.user-name {
+    flex: 1;
+    font-size: 14px;
+    color: #555;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.btn-logout {
+    padding: 6px 14px;
+    background: #f5f2ee;
+    border: none;
+    border-radius: 10px;
+    font-size: 12px;
+    font-family: 'Jua', sans-serif;
+    color: #aaa;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-logout:hover {
+    background: #ffe0e0;
+    color: #e07070;
+}
+
 h1 {
     text-align: center;
     color: #7abb7a;
