@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>투두리스트</title>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,11 +12,52 @@
         <h1>할 일 목록</h1>
 
         <div class="input-section">
-            <input type="text" id="todo-input" placeholder="할 일을 입력하세요">
-            <button id="add-btn">추가</button>
+            <div class="input-main">
+                <input type="text" id="todo-input" placeholder="할 일을 입력하세요">
+                <button id="add-btn">추가</button>
+            </div>
+            <input type="text" id="category-input" placeholder="카테고리">
+            <div id="category-chips" class="category-chips"></div>
         </div>
 
-        <ul id="todo-list"></ul>
+        <div class="view-toggle">
+            <button class="toggle-btn active" data-view="list">리스트</button>
+            <button class="toggle-btn" data-view="calendar">캘린더</button>
+        </div>
+
+        <div id="list-view" class="view active">
+            <div class="list-header">
+                <select id="filter-category">
+                    <option value="">전체 카테고리</option>
+                </select>
+            </div>
+            <div class="list-container">
+                <ul id="todo-list"></ul>
+                <p id="empty-msg" class="empty-msg" style="display:none;">할 일이 없습니다 :)</p>
+            </div>
+        </div>
+
+        <div id="calendar-view" class="view">
+            <div class="cal-card">
+                <div class="cal-header">
+                    <button id="prev-month" class="cal-nav-btn">&lsaquo;</button>
+                    <span id="cal-month-label"></span>
+                    <button id="next-month" class="cal-nav-btn">&rsaquo;</button>
+                </div>
+                <div class="cal-weekdays">
+                    <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+                </div>
+                <div id="cal-days" class="cal-days"></div>
+            </div>
+            <div id="cal-detail" class="cal-detail" style="display:none;">
+                <h3 id="cal-detail-title"></h3>
+                <ul id="cal-detail-list"></ul>
+            </div>
+        </div>
+
+        <footer class="footer">
+            문의 <a href="https://blog.naver.com/realziji" target="_blank" rel="noopener noreferrer">blog.naver.com/realziji</a>
+        </footer>
     </div>
 
     <script src="app.js"></script>
