@@ -98,12 +98,21 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// === Analytics Helper ===
+function trackEvent(eventName, params) {
+    if (typeof gtag === 'function') {
+        gtag('event', eventName, params || {});
+    }
+}
+
 // === Auth Functions ===
 function signInWithGoogle() {
     authError.textContent = '';
+    trackEvent('login_click', { method: 'google' });
     const provider = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(provider).catch(err => {
         console.error('Login error:', err);
+        trackEvent('login_error', { error_code: err.code });
         if (err.code === 'auth/popup-closed-by-user') {
             authError.textContent = '로그인이 취소되었습니다';
         } else if (err.code === 'auth/popup-blocked') {
@@ -115,6 +124,7 @@ function signInWithGoogle() {
 }
 
 function signOutUser() {
+    trackEvent('logout_click', {});
     auth.signOut().catch(err => {
         console.error('Logout error:', err);
     });
@@ -136,6 +146,8 @@ auth.onAuthStateChanged(async user => {
         // Show app, hide auth
         authScreen.style.display = 'none';
         appContainer.style.display = '';
+
+        trackEvent('login_success', { method: 'google' });
 
         // Migrate localStorage data if needed
         await migrateLocalStorage(user.uid);
@@ -266,6 +278,7 @@ function saveCategories() {
 // === Category Management ===
 function ensureCategory(name) {
     if (!name || categories.includes(name)) return;
+    trackEvent('category_create', { category_name: name, total_categories: categories.length + 1 });
     categories.push(name);
     saveCategories();
     renderCategoryChips();
@@ -273,6 +286,7 @@ function ensureCategory(name) {
 }
 
 function deleteCategory(name) {
+    trackEvent('category_delete', { category_name: name });
     categories = categories.filter(c => c !== name);
     if (selectedCategory === name) {
         selectedCategory = '';
@@ -305,9 +319,11 @@ function renderCategoryChips() {
 
         chip.addEventListener('click', () => {
             if (selectedCategory === cat) {
+                trackEvent('category_deselect', { category_name: cat });
                 selectedCategory = '';
                 categoryInput.value = '';
             } else {
+                trackEvent('category_select', { category_name: cat });
                 selectedCategory = cat;
                 categoryInput.value = cat;
             }
@@ -343,6 +359,13 @@ function addTodo() {
         createdAt: new Date().toISOString()
     };
 
+    trackEvent('todo_add', {
+        has_category: !!catName,
+        category_name: catName || '(없음)',
+        text_length: text.length,
+        total_todos: todos.length + 1
+    });
+
     // Optimistic update
     todos.push(todo);
     render();
@@ -369,6 +392,13 @@ function toggleTodo(id) {
     const prevCompletedAt = todo.completedAt;
     todo.completed = !todo.completed;
     todo.completedAt = todo.completed ? new Date().toISOString() : null;
+
+    trackEvent(todo.completed ? 'todo_complete' : 'todo_uncomplete', {
+        category_name: todo.category || '(없음)',
+        has_deadline: !!todo.deadline,
+        is_overdue: !todo.completed && isOverdue(todo.deadline)
+    });
+
     render();
 
     // Firestore write
@@ -389,6 +419,12 @@ function deleteTodo(id) {
 
     // Optimistic update
     const removed = todos.find(t => t.id === id);
+    trackEvent('todo_delete', {
+        was_completed: removed ? removed.completed : false,
+        category_name: removed ? (removed.category || '(없음)') : '(없음)',
+        had_deadline: removed ? !!removed.deadline : false,
+        remaining_todos: todos.length - 1
+    });
     todos = todos.filter(t => t.id !== id);
     render();
 
@@ -409,6 +445,10 @@ function updateDeadline(id, newDeadline) {
 
     // Optimistic update
     const prevDeadline = todo.deadline;
+    trackEvent(prevDeadline ? 'deadline_change' : 'deadline_set', {
+        category_name: todo.category || '(없음)',
+        deadline_date: newDeadline || '(제거)'
+    });
     todo.deadline = newDeadline || null;
     render();
 
@@ -489,6 +529,7 @@ function createTodoElement(todo) {
         badge.title = '클릭하여 변경';
         badge.addEventListener('click', (e) => {
             e.stopPropagation();
+            trackEvent('deadline_badge_click', { current_deadline: todo.deadline });
             showInlineDeadline(todo.id, meta);
         });
         meta.appendChild(badge);
@@ -504,7 +545,10 @@ function createTodoElement(todo) {
         const dlBtn = document.createElement('button');
         dlBtn.className = 'btn-sm btn-deadline';
         dlBtn.textContent = '마감일';
-        dlBtn.addEventListener('click', () => showInlineDeadline(todo.id, meta));
+        dlBtn.addEventListener('click', () => {
+            trackEvent('deadline_btn_click', { category_name: todo.category || '(없음)' });
+            showInlineDeadline(todo.id, meta);
+        });
         actions.appendChild(dlBtn);
     }
 
@@ -615,6 +659,11 @@ function renderCalendar() {
 
         day.addEventListener('click', () => {
             calSelectedDate = calSelectedDate === dateStr ? null : dateStr;
+            trackEvent('calendar_day_click', {
+                date: dateStr,
+                has_deadlines: dayDeadlines.length,
+                has_completed: dayCompleted.length
+            });
             renderCalendar();
         });
 
@@ -725,6 +774,7 @@ function renderCalDetail(dateStr) {
 // === View Toggle ===
 document.querySelectorAll('.toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+        trackEvent('view_switch', { view_name: btn.dataset.view });
         document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
         btn.classList.add('active');
@@ -763,11 +813,15 @@ categoryInput.addEventListener('input', () => {
     renderCategoryChips();
 });
 
-filterCategory.addEventListener('change', renderList);
+filterCategory.addEventListener('change', () => {
+    trackEvent('category_filter', { filter_value: filterCategory.value || '전체' });
+    renderList();
+});
 
 prevMonthBtn.addEventListener('click', () => {
     calMonth--;
     if (calMonth < 0) { calMonth = 11; calYear--; }
+    trackEvent('calendar_nav', { direction: 'prev', year: calYear, month: calMonth + 1 });
     calSelectedDate = null;
     renderCalendar();
 });
@@ -775,6 +829,7 @@ prevMonthBtn.addEventListener('click', () => {
 nextMonthBtn.addEventListener('click', () => {
     calMonth++;
     if (calMonth > 11) { calMonth = 0; calYear++; }
+    trackEvent('calendar_nav', { direction: 'next', year: calYear, month: calMonth + 1 });
     calSelectedDate = null;
     renderCalendar();
 });
