@@ -91,17 +91,27 @@ function escapeHtml(str) {
 }
 
 // === Auth Functions ===
+function isMobile() {
+    return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
 function signInWithGoogle() {
     authError.textContent = '';
     const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider).catch(err => {
-        console.error('Login error:', err);
-        if (err.code === 'auth/popup-closed-by-user') {
-            authError.textContent = '로그인이 취소되었습니다';
-        } else {
-            authError.textContent = '로그인 실패: ' + err.message;
-        }
-    });
+    if (isMobile()) {
+        auth.signInWithRedirect(provider);
+    } else {
+        auth.signInWithPopup(provider).catch(err => {
+            console.error('Login error:', err);
+            if (err.code === 'auth/popup-closed-by-user') {
+                authError.textContent = '로그인이 취소되었습니다';
+            } else if (err.code === 'auth/popup-blocked') {
+                auth.signInWithRedirect(provider);
+            } else {
+                authError.textContent = '로그인 실패: ' + err.message;
+            }
+        });
+    }
 }
 
 function signOutUser() {
