@@ -530,6 +530,54 @@ nextMonthBtn.addEventListener('click', () => {
     renderCalendar();
 });
 
+// === Data Migration ===
+if (!localStorage.getItem('migrated_v1')) {
+    const completedItems = [
+        '투두리스트앱 수정하기',
+        '블로그 편집기 배포하기',
+        '클로드코드 추천코드만들거',
+        '클로드코드 추천코드 돌아가는자 확인하기',
+        '루루선물하기 코드짜기'
+    ];
+    const pendingItems = [
+        '책 기록하는 앱 만들기',
+        '클로드 코드 스터디 멘트 수정하기(최종 요약하는 버전으로)',
+        '클로드코드 스터디 홍보(오카, 취성패 스팩업 등등)',
+        '스레드 클로드코드 파널 설계',
+        '스타일씨 리뷰수정',
+        '알라딘 입금',
+        '필테 체험단 취소',
+        '문어갈사 택배보내기'
+    ];
+
+    completedItems.forEach(text => {
+        todos.push({
+            id: generateId(),
+            text: text,
+            category: '',
+            deadline: '2026-02-09',
+            completed: true,
+            completedAt: '2026-02-09T17:00:00.000Z',
+            createdAt: new Date().toISOString()
+        });
+    });
+
+    pendingItems.forEach(text => {
+        todos.push({
+            id: generateId(),
+            text: text,
+            category: '',
+            deadline: null,
+            completed: false,
+            completedAt: null,
+            createdAt: new Date().toISOString()
+        });
+    });
+
+    save();
+    localStorage.setItem('migrated_v1', 'true');
+}
+
 // === Init ===
 renderCategoryChips();
 renderFilterOptions();
